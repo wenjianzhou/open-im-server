@@ -151,19 +151,21 @@ func (a *authDatabase) checkToken(ctx context.Context, tokens map[int]map[string
 	switch a.multiLogin.Policy {
 	case constant.DefalutNotKick:
 		for plt, ts := range loginTokenMap {
-			l := len(ts)
-			if platformID == plt {
-				l++
-			}
 			limit := a.multiLogin.MaxNumOneEnd
-			if l > limit {
-				kickToken = append(kickToken, ts[:l-limit]...)
+			keepCount := limit
+			if platformID == plt {
+				keepCount-- // 为新token预留位置
+			}
+			if len(ts) > keepCount && keepCount >= 0 {
+				kickToken = append(kickToken, ts[:len(ts)-keepCount]...)
 			}
 		}
 	case constant.AllLoginButSameTermKick:
 		for plt, ts := range loginTokenMap {
-			kickToken = append(kickToken, ts[:len(ts)-1]...)
-			if plt == platformID {
+			if len(ts) > 1 {
+				kickToken = append(kickToken, ts[:len(ts)-1]...)
+			}
+			if plt == platformID && len(ts) > 0 {
 				kickToken = append(kickToken, ts[len(ts)-1])
 			}
 		}
@@ -185,14 +187,20 @@ func (a *authDatabase) checkToken(ctx context.Context, tokens map[int]map[string
 					// Keep a token from another end
 					if isReserve {
 						isReserve = false
-						kickToken = append(kickToken, ts[:len(ts)-1]...)
-						preKick = append(preKick, ts[len(ts)-1])
+						if len(ts) > 1 {
+							kickToken = append(kickToken, ts[:len(ts)-1]...)
+						}
+						if len(ts) > 0 {
+							preKick = append(preKick, ts[len(ts)-1])
+						}
 						continue
 					} else {
 						// Prioritize keeping Android
 						if plt == constant.AndroidPlatformID {
 							kickToken = append(kickToken, preKick...)
-							kickToken = append(kickToken, ts[:len(ts)-1]...)
+							if len(ts) > 1 {
+								kickToken = append(kickToken, ts[:len(ts)-1]...)
+							}
 						} else {
 							kickToken = append(kickToken, ts...)
 						}
@@ -211,7 +219,9 @@ func (a *authDatabase) checkToken(ctx context.Context, tokens map[int]map[string
 			} else {
 				if _, ok := reserved[constant.PlatformIDToClass(plt)]; !ok {
 					reserved[constant.PlatformIDToClass(plt)] = struct{}{}
-					kickToken = append(kickToken, ts[:len(ts)-1]...)
+					if len(ts) > 1 {
+						kickToken = append(kickToken, ts[:len(ts)-1]...)
+					}
 					continue
 				} else {
 					kickToken = append(kickToken, ts...)
